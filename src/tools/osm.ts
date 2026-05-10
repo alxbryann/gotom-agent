@@ -1,5 +1,6 @@
 import { tool } from 'ai';
 import { z } from 'zod';
+import { emptyLead, type Lead } from '../lib/lead.js';
 
 /**
  * Mapeo de categorías en español a tags de OpenStreetMap.
@@ -181,44 +182,50 @@ Nota: los datos dependen de lo que la comunidad OSM haya mapeado en la zona — 
       return { error: `Overpass API no respondió. ${hint} Detalles: ${errors.join('; ')}` };
     }
 
-    // ── 4. Formatear resultados ────────────────────────────────────────────
+    // ── 4. Normalizar a Lead[] ─────────────────────────────────────────────
     const named = elements.filter((e) => e.tags?.name);
 
-    const results = named.slice(0, limit).map((e) => {
+    const results: Lead[] = named.slice(0, limit).map((e) => {
       const t = e.tags!;
-      const addressParts = [t['addr:street'], t['addr:housenumber'], t['addr:suburb'], t['addr:city']]
+      const address = [t['addr:street'], t['addr:housenumber'], t['addr:suburb'], t['addr:city']]
         .filter(Boolean)
-        .join(', ');
-      const phone = t.phone ?? t['contact:phone'] ?? null;
-      const website = t.website ?? t['contact:website'] ?? null;
-
-      return {
+        .join(', ') || null;
+      return emptyLead({
         name: t.name,
-        address: addressParts || null,
-        phone,
-        website,
+        category,
+        zone: t['addr:suburb'] ?? null,
+        city: t['addr:city'] ?? null,
+        country: t['addr:country'] ?? null,
+        address,
+        phone: t.phone ?? t['contact:phone'] ?? null,
+        whatsapp: t['contact:whatsapp'] ?? null,
+        email: t.email ?? t['contact:email'] ?? null,
+        website: t.website ?? t['contact:website'] ?? null,
         instagram: t['contact:instagram'] ?? null,
-        has_website: Boolean(website),
-      };
+        facebook: t['contact:facebook'] ?? null,
+        source: 'osm',
+        status: 'discovered',
+        notes: display_name,
+      });
     });
 
     if (results.length === 0) {
       return {
-        source: 'OpenStreetMap',
+        source: 'osm',
         location_found: display_name,
         category,
         total: 0,
-        note: `OpenStreetMap no tiene "${category}" registradas en "${location}". Esto no significa que no existan — simplemente la comunidad OSM no las ha mapeado aún en esa zona. Opción: configurar Google Places API para datos más completos.`,
+        note: `OpenStreetMap no tiene "${category}" registradas en "${location}". Esto no significa que no existan — simplemente la comunidad OSM no las ha mapeado aún en esa zona.`,
         results: [],
       };
     }
 
     return {
-      source: 'OpenStreetMap',
+      source: 'osm',
       location_found: display_name,
       category,
       total: results.length,
-      blue_ocean_count: results.filter((r) => !r.has_website).length,
+      blue_ocean_count: results.filter((r) => !r.website).length,
       results,
     };
   },

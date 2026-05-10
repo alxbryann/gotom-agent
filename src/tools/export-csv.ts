@@ -1,11 +1,27 @@
 import { tool } from 'ai';
 import { z } from 'zod';
+import { LEAD_COLUMNS } from '../lib/lead.js';
 
 function escapeCsvCell(v: unknown): string {
   if (v === null || v === undefined) return '';
   const s = String(v);
   if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
+}
+
+/**
+ * Si las filas tienen al menos `name` + `source` + `status` (los tres
+ * obligatorios del Lead), usamos el orden canónico de columnas para que
+ * todos los CSVs del agente se vean iguales sin importar la fuente.
+ */
+function looksLikeLeadRows(rows: Array<Record<string, unknown>>): boolean {
+  if (rows.length === 0) return false;
+  const sample = rows[0];
+  return (
+    typeof sample.name === 'string' &&
+    typeof sample.source === 'string' &&
+    typeof sample.status === 'string'
+  );
 }
 
 export const exportToCsv = tool({
@@ -26,10 +42,16 @@ Excel y Google Sheets abren CSV directamente.
       return { error: 'No hay filas para exportar.' };
     }
 
-    // Unión de todas las claves para no perder columnas si filas tienen shape distinto.
-    const headerSet = new Set<string>();
-    for (const r of rows) for (const k of Object.keys(r)) headerSet.add(k);
-    const headers = Array.from(headerSet);
+    // Si las filas son Leads, usamos el orden canónico. Si no, unimos todas
+    // las claves para no perder columnas con shapes mixtos.
+    let headers: string[];
+    if (looksLikeLeadRows(rows)) {
+      headers = LEAD_COLUMNS as unknown as string[];
+    } else {
+      const headerSet = new Set<string>();
+      for (const r of rows) for (const k of Object.keys(r)) headerSet.add(k);
+      headers = Array.from(headerSet);
+    }
 
     const lines = [
       headers.map(escapeCsvCell).join(','),

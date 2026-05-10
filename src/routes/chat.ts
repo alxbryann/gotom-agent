@@ -8,8 +8,8 @@ import {
 import { Hono } from 'hono';
 import { getScraplingClient, resetScraplingClient } from '../lib/mcp.js';
 import { SYSTEM_PROMPT } from '../prompts/system.js';
-import { findLocalBusinesses } from '../tools/places.js';
 import { findLocalBusinessesOsm } from '../tools/osm.js';
+import { findBusinessPartner } from '../tools/partner.js';
 import { exportToCsv } from '../tools/export-csv.js';
 import { patchMcpTools } from '../tools/mcp-fix.js';
 import { SCRAPLING_TOOL_SCHEMAS } from '../tools/scrapling-schemas.js';
@@ -68,8 +68,8 @@ chatRoute.post('/', async (c) => {
       messages: convertToModelMessages(messages),
       tools: {
         ...scraplingTools,
-        find_local_businesses: findLocalBusinesses,
         find_local_businesses_osm: findLocalBusinessesOsm,
+        find_business_partner: findBusinessPartner,
         export_to_csv: exportToCsv,
       },
       // Acotamos el "razonamiento autónomo" a 6 pasos (≈ 6 tool calls como
