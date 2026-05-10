@@ -3,36 +3,25 @@ import { z } from 'zod';
 import { emptyLead, LeadSchema, type Lead } from '../lib/lead.js';
 
 /**
- * Microservicio del partner que reemplaza el rol de Google Places en el
- * pipeline. El partner se encarga internamente de combinar Places + LLM
- * + scraping liviano para devolver leads con redes sociales, teléfono,
- * web, etc. Esta tool es el último paso de descubrimiento/enriquecimiento.
+ * Llama al territory-analyzer (POST /analyze-territory).
+ * Descubre negocios nuevos en Google Maps + enriquece con Street View + LLM.
  *
- * Contrato del partner:
- *   POST <PARTNER_SCRAPER_URL>
- *   { "nicho": "barbería", "zona": "Bogotá, Kennedy",
- *     "candidates": Lead[]  // opcional: leads ya encontrados a enriquecer
- *   }
- *   → { "results": <objeto[] que mapeamos a Lead[]> }
+ * Contrato:
+ *   POST PARTNER_SCRAPER_URL
+ *   { category, zone, city, country?, radius?, maxResults?, existing_businesses? }
+ *   → { query, stats, existing_businesses: Ms2Business[] }
  */
 
-const PartnerResultSchema = z
+const Ms2BusinessSchema = z
   .object({
-    placeId: z.string().nullable().optional(),
     name: z.string(),
+    category: z.string().nullable().optional(),
+    zone: z.string().nullable().optional(),
+    city: z.string().nullable().optional(),
+    country: z.string().nullable().optional(),
     address: z.string().nullable().optional(),
-    types: z.array(z.string()).nullable().optional(),
-    status: z.string().nullable().optional(),
-    reason: z.string().nullable().optional(),
-    location: z
-      .object({
-        latitude: z.number().nullable().optional(),
-        longitude: z.number().nullable().optional(),
-      })
-      .nullable()
-      .optional(),
-    detail: z.string().nullable().optional(),
-    // Campos enriquecidos opcionales — si el partner los devuelve los pasamos
+    latitude: z.number().nullable().optional(),
+    longitude: z.number().nullable().optional(),
     phone: z.string().nullable().optional(),
     whatsapp: z.string().nullable().optional(),
     email: z.string().nullable().optional(),
@@ -40,27 +29,46 @@ const PartnerResultSchema = z
     instagram: z.string().nullable().optional(),
     facebook: z.string().nullable().optional(),
     tiktok: z.string().nullable().optional(),
+    google_place_id: z.string().nullable().optional(),
+    google_maps_url: z.string().nullable().optional(),
     rating: z.number().nullable().optional(),
     ratings_count: z.number().nullable().optional(),
-    google_maps_url: z.string().nullable().optional(),
+    source: z.string().nullable().optional(),
+    status: z.string().nullable().optional(),
+    notes: z.string().nullable().optional(),
   })
   .passthrough();
 
-const PartnerResponseSchema = z.object({
-  center: z
+const TerritoryResponseSchema = z.object({
+  query: z
     .object({
-      latitude: z.number().nullable().optional(),
-      longitude: z.number().nullable().optional(),
-      radiusMeters: z.number().nullable().optional(),
+      category: z.string().optional(),
+      zone: z.string().optional(),
+      city: z.string().optional(),
+      country: z.string().optional(),
+      center: z
+        .object({
+          latitude: z.number().nullable().optional(),
+          longitude: z.number().nullable().optional(),
+          radiusMeters: z.number().nullable().optional(),
+        })
+        .optional(),
     })
-    .nullable()
     .optional(),
-  results: z.array(PartnerResultSchema),
+  stats: z
+    .object({
+      existingReceived: z.number().optional(),
+      placesFound: z.number().optional(),
+      dedupedAgainstExisting: z.number().optional(),
+      newlyDiscovered: z.number().optional(),
+      facadeDescribed: z.number().optional(),
+      facadeSkipped: z.number().optional(),
+    })
+    .optional(),
+  existing_businesses: z.array(Ms2BusinessSchema),
 });
 
-function partnerStatusToLeadStatus(
-  s: string | null | undefined,
-): Lead['status'] {
+function ms2StatusToLeadStatus(s: string | null | undefined): Lead['status'] {
   if (!s) return 'enriched';
   if (s === 'skipped') return 'skipped';
   if (s === 'error') return 'error';
@@ -68,37 +76,54 @@ function partnerStatusToLeadStatus(
 }
 
 export const findBusinessPartner = tool({
-  description: `Enriquece una lista de leads ya descubierta. Es el ÚLTIMO paso del pipeline.
+  description: `Descubre y enriquece negocios usando el territory-analyzer.
+Busca en Google Maps los negocios del \`category\` en la \`zone\` y \`city\` indicadas,
+aplica deduplicación contra los \`existing_businesses\` que ya tengas,
+y enriquece cada resultado con Street View + análisis LLM de fachada.
 
-NO descubre por sí solo — necesita que tú le pases \`candidates\` (los leads que sacaste
-con \`find_local_businesses_osm\` o con la receta de scraping de Google Maps).
-
-El microservicio del partner los procesa y te devuelve los mismos negocios + info nueva
-que encuentre: redes sociales (Instagram, Facebook, TikTok), teléfono, web, email.
-Algunos pueden volver con \`status: "skipped"\` si el partner no logró enriquecerlos —
-preserva los datos originales que ya tenías.
-
-Devuelve \`Lead[]\` con el mismo shape de OSM y del CSV.`,
+Úsalo como último paso del pipeline o cuando quieras descubrir negocios nuevos
+en una zona concreta. Devuelve \`Lead[]\` listos para exportar.`,
   inputSchema: z.object({
-    nicho: z
+    category: z
       .string()
       .describe('Categoría del negocio en español. Ej: "barbería", "panadería", "restaurante".'),
-    zona: z
+    zone: z
       .string()
-      .describe('Ciudad y zona separadas por coma. Ej: "Bogotá, Kennedy" o "Medellín, Laureles".'),
-    candidates: z
+      .describe('Barrio o zona dentro de la ciudad. Ej: "Kennedy", "Laureles", "El Poblado".'),
+    city: z
+      .string()
+      .describe('Ciudad. Ej: "Bogotá", "Medellín", "Cali".'),
+    country: z
+      .string()
+      .optional()
+      .describe('País. Por defecto "Colombia".'),
+    radius: z
+      .number()
+      .optional()
+      .describe('Radio en metros para la búsqueda (máx 50000). Por defecto 1500.'),
+    maxResults: z
+      .number()
+      .optional()
+      .describe('Máximo de negocios nuevos a analizar (1–60). Por defecto 20.'),
+    existing_businesses: z
       .array(LeadSchema)
-      .min(1)
+      .optional()
       .describe(
-        'OBLIGATORIO. Lista de leads ya encontrados (OSM o scraping). El partner los enriquece — no los descubre desde cero.',
+        'Leads ya conocidos para deduplicar y enriquecer. Opcional — si no pasas nada descubre desde cero.',
+      ),
+    icp_description: z
+      .string()
+      .optional()
+      .describe(
+        'Contexto del ICP extraído de la conversación con el usuario: producto, propuesta de valor, perfil del cliente ideal, ticket, etc. Ayuda al territory-analyzer a filtrar y priorizar mejor.',
       ),
   }),
-  execute: async ({ nicho, zona, candidates }) => {
+  execute: async ({ category, zone, city, country, radius, maxResults, existing_businesses, icp_description }) => {
     const url = process.env.PARTNER_SCRAPER_URL?.trim();
     if (!url) {
       return {
         error:
-          'PARTNER_SCRAPER_URL no configurada. Pega la URL del microservicio del partner en el .env y reinicia el agente.',
+          'PARTNER_SCRAPER_URL no configurada. Agrega la URL del territory-analyzer en el .env y reinicia el agente.',
       };
     }
 
@@ -109,7 +134,16 @@ Devuelve \`Lead[]\` con el mismo shape de OSM y del CSV.`,
     const token = process.env.PARTNER_SCRAPER_TOKEN?.trim();
     if (token) headers.Authorization = `Bearer ${token}`;
 
-    const body = JSON.stringify({ nicho, zona, candidates });
+    const body = JSON.stringify({
+      category,
+      zone,
+      city,
+      ...(country && { country }),
+      ...(radius && { radius }),
+      ...(maxResults && { maxResults }),
+      existing_businesses: existing_businesses ?? [],
+      ...(icp_description && { icp_description }),
+    });
 
     let raw: unknown;
     try {
@@ -117,51 +151,48 @@ Devuelve \`Lead[]\` con el mismo shape de OSM y del CSV.`,
         method: 'POST',
         headers,
         body,
-        signal: AbortSignal.timeout(60_000),
+        signal: AbortSignal.timeout(120_000),
       });
       if (!res.ok) {
         const text = await res.text().catch(() => '');
         return {
-          error: `Partner devolvió ${res.status}. Detalle: ${text.slice(0, 300)}`,
+          error: `Territory-analyzer devolvió ${res.status}. Detalle: ${text.slice(0, 300)}`,
         };
       }
       raw = await res.json();
     } catch (err) {
       return {
-        error: `No se pudo contactar al partner: ${(err as Error).message}`,
+        error: `No se pudo contactar al territory-analyzer: ${(err as Error).message}`,
       };
     }
 
-    const parsed = PartnerResponseSchema.safeParse(raw);
+    const parsed = TerritoryResponseSchema.safeParse(raw);
     if (!parsed.success) {
       return {
-        error: `Respuesta del partner con shape inesperado: ${parsed.error.message}`,
+        error: `Respuesta del territory-analyzer con shape inesperado: ${parsed.error.message}`,
         raw,
       };
     }
 
-    // Indexamos los candidates por placeId/name para preservar los datos que
-    // ya teníamos (ej. zona detectada por OSM) cuando el partner devuelve un
-    // entry como "skipped" sin enriquecer.
     const baseByKey = new Map<string, Lead>();
-    for (const c of candidates) {
+    for (const c of existing_businesses ?? []) {
       if (c.google_place_id) baseByKey.set(c.google_place_id, c);
       baseByKey.set(c.name.toLowerCase(), c);
     }
 
-    const results: Lead[] = parsed.data.results.map((r) => {
+    const results: Lead[] = parsed.data.existing_businesses.map((r) => {
       const base =
-        (r.placeId && baseByKey.get(r.placeId)) ||
+        (r.google_place_id && baseByKey.get(r.google_place_id)) ||
         baseByKey.get(r.name.toLowerCase());
       return emptyLead({
         name: r.name,
-        category: base?.category ?? nicho,
-        zone: base?.zone ?? null,
-        city: base?.city ?? null,
-        country: base?.country ?? null,
+        category: r.category ?? base?.category ?? category,
+        zone: r.zone ?? base?.zone ?? zone,
+        city: r.city ?? base?.city ?? city,
+        country: r.country ?? base?.country ?? country ?? null,
         address: r.address ?? base?.address ?? null,
-        latitude: r.location?.latitude ?? base?.latitude ?? null,
-        longitude: r.location?.longitude ?? base?.longitude ?? null,
+        latitude: r.latitude ?? base?.latitude ?? null,
+        longitude: r.longitude ?? base?.longitude ?? null,
         phone: r.phone ?? base?.phone ?? null,
         whatsapp: r.whatsapp ?? base?.whatsapp ?? null,
         email: r.email ?? base?.email ?? null,
@@ -169,21 +200,25 @@ Devuelve \`Lead[]\` con el mismo shape de OSM y del CSV.`,
         instagram: r.instagram ?? base?.instagram ?? null,
         facebook: r.facebook ?? base?.facebook ?? null,
         tiktok: r.tiktok ?? base?.tiktok ?? null,
-        google_place_id: r.placeId ?? base?.google_place_id ?? null,
+        google_place_id: r.google_place_id ?? base?.google_place_id ?? null,
         google_maps_url: r.google_maps_url ?? base?.google_maps_url ?? null,
         rating: r.rating ?? base?.rating ?? null,
         ratings_count: r.ratings_count ?? base?.ratings_count ?? null,
         source: 'partner',
-        status: partnerStatusToLeadStatus(r.status),
-        notes: r.reason || r.detail || null,
+        status: ms2StatusToLeadStatus(r.status),
+        notes: r.notes ?? null,
       });
     });
 
+    const { stats, query } = parsed.data;
+
     return {
-      source: 'partner',
-      nicho,
-      zona,
-      center: parsed.data.center ?? null,
+      source: 'territory-analyzer',
+      category,
+      zone,
+      city,
+      center: query?.center ?? null,
+      stats: stats ?? null,
       total: results.length,
       enriched_count: results.filter((r) => r.status === 'enriched').length,
       skipped_count: results.filter((r) => r.status === 'skipped').length,
