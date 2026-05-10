@@ -81,8 +81,10 @@ Busca en Google Maps los negocios del \`category\` en la \`zone\` y \`city\` ind
 aplica deduplicación contra los \`existing_businesses\` que ya tengas,
 y enriquece cada resultado con Street View + análisis LLM de fachada.
 
-Úsalo como último paso del pipeline o cuando quieras descubrir negocios nuevos
-en una zona concreta. Devuelve \`Lead[]\` listos para exportar.`,
+Es el PRIMER paso del pipeline de prospección. Devuelve \`Lead[]\` con
+\`source: "partner"\`. Apenas terminés esta llamada y haya \`results.length > 0\`,
+encadená SIEMPRE con \`profile_prospects\` (paso 2, módulo GTM-Insights) antes
+de responderle al usuario.`,
   inputSchema: z.object({
     category: z
       .string()
@@ -223,6 +225,10 @@ en una zona concreta. Devuelve \`Lead[]\` listos para exportar.`,
       enriched_count: results.filter((r) => r.status === 'enriched').length,
       skipped_count: results.filter((r) => r.status === 'skipped').length,
       results,
+      next_step:
+        results.length > 0
+          ? 'Ahora llamá `profile_prospects` con `leads: results` antes de responderle al usuario.'
+          : 'No hay leads — no llames a `profile_prospects`. Probá otra zona.',
     };
   },
 });

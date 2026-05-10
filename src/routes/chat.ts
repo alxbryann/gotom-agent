@@ -10,6 +10,7 @@ import { getScraplingClient, resetScraplingClient } from '../lib/mcp.js';
 import { SYSTEM_PROMPT } from '../prompts/system.js';
 import { findLocalBusinessesOsm } from '../tools/osm.js';
 import { findBusinessPartner } from '../tools/partner.js';
+import { profileProspects } from '../tools/profile-prospects.js';
 import { exportToCsv } from '../tools/export-csv.js';
 import { patchMcpTools } from '../tools/mcp-fix.js';
 import { SCRAPLING_TOOL_SCHEMAS } from '../tools/scrapling-schemas.js';
@@ -70,12 +71,14 @@ chatRoute.post('/', async (c) => {
         ...scraplingTools,
         find_local_businesses_osm: findLocalBusinessesOsm,
         find_business_partner: findBusinessPartner,
+        profile_prospects: profileProspects,
         export_to_csv: exportToCsv,
       },
-      // Acotamos el "razonamiento autónomo" a 6 pasos (≈ 6 tool calls como
-      // máximo) para que el modelo no encadene 10 scrapes a sitios distintos.
-      // Si en 2-3 intentos no consiguió datos útiles, debe avisar al usuario.
-      stopWhen: stepCountIs(6),
+      // Acotamos el razonamiento autónomo. El pipeline determinista por zona
+      // ya consume 2 pasos (find_business_partner + profile_prospects), más
+      // export_to_csv si lo piden. Subimos a 10 para tolerar 2 zonas seguidas
+      // o algún reintento puntual sin cortar al modelo en mitad del flujo.
+      stopWhen: stepCountIs(10),
       onError: ({ error }) => {
         console.error('[chat] streamText error:', error);
       },
