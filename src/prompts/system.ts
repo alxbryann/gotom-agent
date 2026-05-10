@@ -176,7 +176,7 @@ stealthy_fetch({
   extraction_type: "html",
   css_selector: "a[href*='/maps/place/']",
   main_content_only: false,
-  timeout: 30000,
+  timeout: 300000,
 })
 \`\`\`
 Esto devuelve un array de \`<a>\` tags donde cada uno tiene \`aria-label="<nombre del negocio>"\` y \`href\` con coordenadas embebidas (\`!3dLAT!4dLON\`). Parsea el aria-label y las coordenadas y arma un \`{ name, lat, lon, google_maps_url }\` por cada match.

@@ -53,7 +53,7 @@ chatRoute.post('/', async (c) => {
   let scraplingTools: Record<string, unknown> = {};
   try {
     const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Scrapling MCP timeout')), 4000),
+      setTimeout(() => reject(new Error('Scrapling MCP timeout')), 300_000),
     );
     scraplingTools = await Promise.race([getScraplingTools(), timeout]);
   } catch (err) {

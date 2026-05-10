@@ -30,7 +30,7 @@ const commonHttpParams = {
   extraction_type: extractionType.optional(),
   css_selector: z.string().nullable().optional(),
   main_content_only: z.boolean().default(true).optional(),
-  timeout: z.number().int().positive().default(30).optional(),
+  timeout: z.number().int().positive().default(300).optional(),
   follow_redirects: followRedirects.optional(),
   retries: z.number().int().min(0).max(5).default(2).optional(),
   stealthy_headers: z.boolean().default(true).optional(),
@@ -42,13 +42,13 @@ const commonBrowserParams = {
   main_content_only: z.boolean().default(true).optional(),
   headless: z.boolean().default(true).optional(),
   network_idle: z.boolean().default(false).optional(),
-  wait: z.number().int().min(0).max(15000).default(0).optional(),
+  wait: z.number().int().min(0).max(300_000).default(0).optional(),
   wait_selector: z.string().nullable().optional(),
   wait_selector_state: z
     .enum(['attached', 'detached', 'hidden', 'visible'])
     .default('attached')
     .optional(),
-  timeout: z.number().int().positive().default(30000).optional(),
+  timeout: z.number().int().positive().default(300_000).optional(),
   google_search: z.boolean().default(true).optional(),
   session_id: z.string().nullable().optional(),
 } as const;
@@ -67,7 +67,7 @@ export const SCRAPLING_TOOL_SCHEMAS = {
         .describe('"dynamic" = Playwright normal; "stealthy" = bypass anti-bot.'),
       session_id: z.string().nullable().optional(),
       headless: z.boolean().default(true).optional(),
-      timeout: z.number().int().positive().default(30000).optional(),
+      timeout: z.number().int().positive().default(300_000).optional(),
       solve_cloudflare: z.boolean().default(false).optional(),
     }),
   },
@@ -125,8 +125,8 @@ export const SCRAPLING_TOOL_SCHEMAS = {
         .describe('Debe venir de open_session previo (dynamic o stealthy).'),
       image_type: z.enum(['png', 'jpeg']).default('png').optional(),
       full_page: z.boolean().default(false).optional(),
-      wait: z.number().int().min(0).max(15000).default(0).optional(),
-      timeout: z.number().int().positive().default(30000).optional(),
+      wait: z.number().int().min(0).max(300_000).default(0).optional(),
+      timeout: z.number().int().positive().default(300_000).optional(),
     }),
   },
 } as const;

@@ -17,10 +17,10 @@ type McpCallToolResult = {
  * la conversación bloqueada minutos. El modelo recibirá un error textual y
  * podrá decidir cambiar de estrategia o avisar al usuario.
  *
- * Damos 2 minutos para tolerar `stealthy_fetch` con `solve_cloudflare`, que
- * fácilmente tarda 30–60s; antes cortábamos a 25s y abortaba la conexión.
+ * Damos hasta 5 minutos para tolerar `stealthy_fetch` con `solve_cloudflare`
+ * u operaciones muy lentas; el serverless debe tener `maxDuration` acorde.
  */
-const TOOL_TIMEOUT_MS = 120_000;
+const TOOL_TIMEOUT_MS = 300_000;
 
 function timeoutMcpResult(toolName: string, ms: number): McpCallToolResult {
   return {

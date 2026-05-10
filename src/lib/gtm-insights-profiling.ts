@@ -18,7 +18,7 @@ import type { Lead } from './lead.js';
 const DEFAULT_ANALYZE_URL =
   'https://gtm-insights-module-production.up.railway.app/analyze';
 
-const DEFAULT_TIMEOUT_MS = 120_000;
+const DEFAULT_TIMEOUT_MS = 300_000;
 
 export type PriceRange = 'low' | 'mid' | 'high';
 

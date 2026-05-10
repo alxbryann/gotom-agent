@@ -82,7 +82,7 @@ Nota: los datos dependen de lo que la comunidad OSM haya mapeado en la zona — 
           'User-Agent': 'GoTom-Agent/1.0 (hola@gotom.co)',
           'Accept-Language': 'es',
         },
-        signal: AbortSignal.timeout(15_000),
+        signal: AbortSignal.timeout(300_000),
       });
       if (!geoRes.ok) throw new Error(`Nominatim ${geoRes.status}`);
       return (await geoRes.json()) as NominatimResult[];
@@ -125,7 +125,7 @@ Nota: los datos dependen de lo que la comunidad OSM haya mapeado en la zona — 
       )
       .join('\n  ');
 
-    const query = `[out:json][timeout:30];\n(\n  ${tagFilters}\n);\nout center tags ${limit + 10};`;
+    const query = `[out:json][timeout:300];\n(\n  ${tagFilters}\n);\nout center tags ${limit + 10};`;
 
     // ── 3. Consultar Overpass API con varios mirrors ───────────────────────
     const OVERPASS_ENDPOINTS = [
@@ -149,7 +149,7 @@ Nota: los datos dependen de lo que la comunidad OSM haya mapeado en la zona — 
             'User-Agent': 'GoTom-Agent/1.0 (hola@gotom.co)',
           },
           body: `data=${encodeURIComponent(query)}`,
-          signal: AbortSignal.timeout(35_000),
+          signal: AbortSignal.timeout(300_000),
         });
 
         if (ovRes.status === 429 || ovRes.status === 504) {

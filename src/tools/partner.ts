@@ -153,7 +153,7 @@ de responderle al usuario.`,
         method: 'POST',
         headers,
         body,
-        signal: AbortSignal.timeout(120_000),
+        signal: AbortSignal.timeout(300_000),
       });
       if (!res.ok) {
         const text = await res.text().catch(() => '');
