@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { chatRoute } from './routes/chat.js';
+import { prospectSimRoute } from './routes/prospect-sim.js';
 import { ttsRoute } from './routes/tts.js';
 
 export const app = new Hono();
@@ -21,6 +22,7 @@ app.get('/api/health', (c) =>
 );
 
 app.route('/api/chat', chatRoute);
+app.route('/api/prospect-sim', prospectSimRoute);
 app.route('/api/tts', ttsRoute);
 
 export default app;

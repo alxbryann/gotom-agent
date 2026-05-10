@@ -25,6 +25,7 @@ npm run dev
 ## Endpoints
 - `GET  /api/health`
 - `POST /api/chat` — body: `{ messages: UIMessage[] }`, devuelve UI message stream (compatible con `useChat` de `@ai-sdk/react`)
+- `POST /api/prospect-sim` — práctica de ventas: body `{ messages, simulationContext }` (contexto de battlecards + pitch). Sin tools; solo rol prospecto con DeepSeek.
 
 ## Tools del agente
 - **Scrapling** (tools del MCP): cuando el usuario pide scrapear URLs, sector en web, competidores en sitio, etc. Requiere `SCRAPLING_MCP_URL` accesible desde el agente.
