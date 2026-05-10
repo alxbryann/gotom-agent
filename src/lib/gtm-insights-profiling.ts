@@ -177,10 +177,28 @@ export async function fetchProspectProfiling(opts: {
   analyzeUrl: string;
   productContext: InsightsProductContext;
   businesses: InsightsBusiness[];
+  // El schema del módulo (insightsGTM/src/schemas.js) exige `category` e
+  // `icp_description` a nivel raíz, además del `product_context` anidado.
+  // Sin estos dos, Zod rechaza con 400 antes de llegar a analyze().
+  category: string;
+  icpDescription: string;
+  zone?: string | null;
+  city?: string | null;
+  country?: string | null;
   authToken?: string | null;
   timeoutMs?: number;
 }): Promise<ProspectProfilingResult> {
-  const { analyzeUrl, productContext, businesses, authToken } = opts;
+  const {
+    analyzeUrl,
+    productContext,
+    businesses,
+    category,
+    icpDescription,
+    zone,
+    city,
+    country,
+    authToken,
+  } = opts;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   if (businesses.length === 0) {
@@ -202,6 +220,11 @@ export async function fetchProspectProfiling(opts: {
       method: 'POST',
       headers,
       body: JSON.stringify({
+        category,
+        icp_description: icpDescription,
+        zone: zone ?? null,
+        city: city ?? null,
+        country: country ?? null,
         product_context: productContext,
         businesses,
       }),

@@ -52,12 +52,15 @@ chatRoute.post('/', async (c) => {
 
   let scraplingTools: Record<string, unknown> = {};
   try {
+    // Timeout corto: si en 5s no obtenemos handshake, seguimos sin Scrapling.
+    // El circuit breaker en lib/mcp.ts evita reintentar antes de 60s.
     const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Scrapling MCP timeout')), 300_000),
+      setTimeout(() => reject(new Error('Scrapling MCP timeout')), 5_000),
     );
     scraplingTools = await Promise.race([getScraplingTools(), timeout]);
   } catch (err) {
-    console.warn('[chat] Scrapling MCP omitido (no conecta):', err);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[chat] Scrapling MCP omitido (no conecta): ${msg}`);
     resetScraplingClient();
     toolsCache = undefined;
   }

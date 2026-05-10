@@ -66,13 +66,28 @@ listos para cada negocio.`,
       leads.find((l) => l.category)?.category ||
       'general';
 
+    const resolvedZone = zone ?? leads.find((l) => l.zone)?.zone ?? null;
+    const resolvedCity = city ?? leads.find((l) => l.city)?.city ?? null;
+    const resolvedCountry =
+      country ?? leads.find((l) => l.country)?.country ?? null;
+
     const productContext = buildProductContextForInsights({
       category: fallbackCategory,
-      zone: zone ?? leads.find((l) => l.zone)?.zone ?? null,
-      city: city ?? leads.find((l) => l.city)?.city ?? null,
-      country: country ?? leads.find((l) => l.country)?.country ?? null,
+      zone: resolvedZone,
+      city: resolvedCity,
+      country: resolvedCountry,
       icp_description,
     });
+
+    // El módulo exige `icp_description` no vacío. Si el agente no lo pasó,
+    // sintetizamos uno mínimo a partir del contexto disponible para no
+    // bloquear el pipeline con un 400.
+    const geoBits = [resolvedZone, resolvedCity, resolvedCountry]
+      .filter(Boolean)
+      .join(', ');
+    const resolvedIcpDescription =
+      icp_description?.trim() ||
+      `Negocios de ${fallbackCategory}${geoBits ? ` en ${geoBits}` : ''} apropiados para prospección comercial GoTom.`;
 
     const businesses = leadsToInsightsBusinesses(leads, fallbackCategory);
     const token = process.env.GTM_INSIGHTS_ANALYZE_TOKEN?.trim();
@@ -81,6 +96,11 @@ listos para cada negocio.`,
       analyzeUrl,
       productContext,
       businesses,
+      category: fallbackCategory,
+      icpDescription: resolvedIcpDescription,
+      zone: resolvedZone,
+      city: resolvedCity,
+      country: resolvedCountry,
       authToken: token,
     });
 

@@ -17,6 +17,13 @@ let cached:
   | { url: string; clientPromise: Promise<MCPClient> }
   | undefined;
 
+// Circuit breaker: tras un fallo de conexión, marcamos el endpoint como caído
+// durante COOLDOWN_MS para no reintentar (y bloquear ~10s) en cada request.
+const COOLDOWN_MS = 60_000;
+let downUntil:
+  | { url: string; until: number; reason: string }
+  | undefined;
+
 async function buildClient(url: string): Promise<MCPClient> {
   return createMCPClient({
     transport: { type: 'http', url },
@@ -26,6 +33,10 @@ async function buildClient(url: string): Promise<MCPClient> {
 export async function getScraplingClient(): Promise<MCPClient | undefined> {
   const url = process.env.SCRAPLING_MCP_URL?.trim();
   if (!url) return undefined;
+
+  if (downUntil && downUntil.url === url && downUntil.until > Date.now()) {
+    return undefined;
+  }
 
   if (!cached || cached.url !== url) {
     if (cached) {
@@ -38,6 +49,11 @@ export async function getScraplingClient(): Promise<MCPClient | undefined> {
     return await cached.clientPromise;
   } catch (err) {
     cached = undefined;
+    downUntil = {
+      url,
+      until: Date.now() + COOLDOWN_MS,
+      reason: err instanceof Error ? err.message : String(err),
+    };
     throw err;
   }
 }
